@@ -4,7 +4,7 @@ import json
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Literal
+from typing import Dict, List
 
 import requests
 import sh
@@ -46,20 +46,14 @@ def local_tags(version_folders: List[str]) -> Dict[str, List[str]]:
     versions.sort(key=Version)
     tags = {}
     for version_str in versions:
-        version_search = re.search(version_regex, version_str)
-        has_patch = True if version_search and version_search.group(1) else False
-
         version = Version(version_str)
         major_tag = f"{version.major}"
         minor_tag = f"{version.major}.{version.minor}"
-        patch_tag = f"{version.major}.{version.minor}.{version.micro}" if has_patch else None
         # Add the tags if they don't exist
         if major_tag not in tags:
             tags[major_tag] = version_str
         if minor_tag not in tags:
             tags[minor_tag] = version_str
-        if patch_tag and patch_tag not in tags:
-            tags[patch_tag] = version_str
         # Compare the versions if the tag already exists
         if version > Version(tags[major_tag]):
             tags[major_tag] = version_str
@@ -69,7 +63,8 @@ def local_tags(version_folders: List[str]) -> Dict[str, List[str]]:
     tags_per_version = {}
     for v in versions:
         tag_list = [tag for tag, ver in tags.items() if ver == v]
-        tags_per_version[v] = tag_list
+        if tag_list:
+            tags_per_version[v] = tag_list
 
     return tags_per_version
 
@@ -116,7 +111,6 @@ def oci_factory_manifest(
     commit: str,
     versions_with_tags: Dict[str, List[str]],
     risk_track: str = "stable",
-    support: Literal["major", "minor", "patch"] = "minor",
 ) -> str:
     """Generate an OCI Factory manifest (i.e., the 'image.yaml' file).
 
@@ -129,7 +123,6 @@ def oci_factory_manifest(
         commit: SHA of the commit (in the rock repo) to point at.
         versions_with_tags: Dict of {version: [tags]} to add to the manifest.
         risk_track: Track that should be set in the OCI manifest.
-        support: Highest tag specificity to keep with future end-of-life.
 
     Returns:
         The generated 'image.yaml', formatted according to OCI Factory standards.
@@ -141,10 +134,7 @@ def oci_factory_manifest(
             return super().increase_indent(flow, False)
 
     end_of_life_date = datetime.now() + timedelta(days=365 / 4)  # EOL is 3 months by default
-    end_of_life_patch_date = datetime.now() - timedelta(days=1)  # for patch releases
     end_of_life = f"{end_of_life_date.strftime('%Y-%m-%d')}T00:00:00Z"
-    end_of_life_patch = f"{end_of_life_patch_date.strftime('%Y-%m-%d')}T00:00:00Z"
-    max_supported_tag_level = {"major": 1, "minor": 2, "patch": 3}[support]
 
     manifest = {}
     manifest["version"] = 1
@@ -156,10 +146,8 @@ def oci_factory_manifest(
         upload_item["directory"] = version
         upload_item["release"] = {}
         for tag in tags:
-            tag_level = len(tag.split("-")[0].split("."))
-            is_supported = tag_level <= max_supported_tag_level
             upload_item["release"][tag] = {
-                "end-of-life": end_of_life if is_supported else end_of_life_patch,
+                "end-of-life": end_of_life,
                 "risks": [risk_track],
             }
         manifest["upload"].append(upload_item)

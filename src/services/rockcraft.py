@@ -4,7 +4,7 @@ import json
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Literal
+from typing import Dict, List, Literal, Optional
 
 import requests
 import sh
@@ -117,6 +117,7 @@ def oci_factory_manifest(
     versions_with_tags: Dict[str, List[str]],
     risk_track: str = "stable",
     support: Literal["major", "minor", "patch"] = "minor",
+    eol: Optional[datetime] = None,
 ) -> str:
     """Generate an OCI Factory manifest (i.e., the 'image.yaml' file).
 
@@ -130,6 +131,7 @@ def oci_factory_manifest(
         versions_with_tags: Dict of {version: [tags]} to add to the manifest.
         risk_track: Track that should be set in the OCI manifest.
         support: Highest tag specificity to keep with future end-of-life.
+        eol: Custom end-of-life date for supported tags. Defaults to ~3 months from now.
 
     Returns:
         The generated 'image.yaml', formatted according to OCI Factory standards.
@@ -140,7 +142,7 @@ def oci_factory_manifest(
             """Force indent when executing dump."""
             return super().increase_indent(flow, False)
 
-    end_of_life_date = datetime.now() + timedelta(days=365 / 4)  # EOL is 3 months by default
+    end_of_life_date = eol if eol else datetime.now() + timedelta(days=91)
     end_of_life_patch_date = datetime.now() - timedelta(days=1)  # for patch releases
     end_of_life = f"{end_of_life_date.strftime('%Y-%m-%d')}T00:00:00Z"
     end_of_life_patch = f"{end_of_life_patch_date.strftime('%Y-%m-%d')}T00:00:00Z"

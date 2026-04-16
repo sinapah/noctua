@@ -59,7 +59,7 @@ def test_oci_factory_manifest():
     end_of_life_patch = f"{end_of_life_patch_date.strftime('%Y-%m-%d')}T00:00:00Z"
 
     expected_manifest = {
-        "version": 1,
+        "version": 2,
         "upload": [
             {
                 "source": "canonical/prometheus-rock",
@@ -100,7 +100,7 @@ def test_oci_factory_manifest_with_risk_track(risk_track):
     end_of_life_patch = f"{end_of_life_patch_date.strftime('%Y-%m-%d')}T00:00:00Z"
 
     expected_manifest = {
-        "version": 1,
+        "version": 2,
         "upload": [
             {
                 "source": "canonical/prometheus-rock",

@@ -147,7 +147,7 @@ def oci_factory_manifest(
     max_supported_tag_level = {"major": 1, "minor": 2, "patch": 3}[support]
 
     manifest = {}
-    manifest["version"] = 1
+    manifest["version"] = 2
     manifest["upload"] = []
     for version, tags in versions_with_tags.items():
         upload_item = {}

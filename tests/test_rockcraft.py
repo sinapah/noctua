@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Dict, List
+from typing import Dict, List, Literal
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -53,7 +53,7 @@ def test_oci_factory_manifest():
     repository = "canonical/prometheus-rock"
     commit = "abcdef123"
     versions_with_tags = {"1.0.0": ["1.0.0"], "1.0.1": ["1", "1.0", "1.0.1"]}
-    end_of_life_date = datetime.now() + timedelta(days=365 / 4)
+    end_of_life_date = datetime.now() + timedelta(days=91)
     end_of_life = f"{end_of_life_date.strftime('%Y-%m-%d')}T00:00:00Z"
     end_of_life_patch_date = datetime.now() - timedelta(days=1)
     end_of_life_patch = f"{end_of_life_patch_date.strftime('%Y-%m-%d')}T00:00:00Z"
@@ -94,7 +94,7 @@ def test_oci_factory_manifest_with_risk_track(risk_track):
     repository = "canonical/prometheus-rock"
     commit = "abcdef123"
     versions_with_tags = {"1.0.0": ["1.0.0"], "1.0.1": ["1", "1.0", "1.0.1"]}
-    end_of_life_date = datetime.now() + timedelta(days=365 / 4)
+    end_of_life_date = datetime.now() + timedelta(days=91)
     end_of_life = f"{end_of_life_date.strftime('%Y-%m-%d')}T00:00:00Z"
     end_of_life_patch_date = datetime.now() - timedelta(days=1)
     end_of_life_patch = f"{end_of_life_patch_date.strftime('%Y-%m-%d')}T00:00:00Z"
@@ -138,11 +138,13 @@ def test_oci_factory_manifest_with_risk_track(risk_track):
         ("patch", {"1", "1.0", "1.0.1"}),
     ],
 )
-def test_oci_factory_manifest_with_support(support: str, expected_future_tags: set[str]):
+def test_oci_factory_manifest_with_support(
+    support: Literal["major", "minor", "patch"], expected_future_tags: set[str]
+):
     repository = "canonical/prometheus-rock"
     commit = "abcdef123"
     versions_with_tags = {"1.0.1": ["1", "1.0", "1.0.1"]}
-    end_of_life_date = datetime.now() + timedelta(days=365 / 4)
+    end_of_life_date = datetime.now() + timedelta(days=91)
     end_of_life = f"{end_of_life_date.strftime('%Y-%m-%d')}T00:00:00Z"
     end_of_life_patch_date = datetime.now() - timedelta(days=1)
     end_of_life_patch = f"{end_of_life_patch_date.strftime('%Y-%m-%d')}T00:00:00Z"
@@ -161,3 +163,38 @@ def test_oci_factory_manifest_with_support(support: str, expected_future_tags: s
     for tag in ["1", "1.0", "1.0.1"]:
         expected_eol = end_of_life if tag in expected_future_tags else end_of_life_patch
         assert release[tag]["end-of-life"] == expected_eol
+
+
+@pytest.mark.parametrize(
+    "eol_date",
+    [
+        datetime(2027, 1, 1),
+        datetime(2028, 6, 15),
+        datetime(2030, 12, 31),
+    ],
+)
+def test_oci_factory_manifest_with_custom_eol(eol_date: datetime):
+    repository = "canonical/prometheus-rock"
+    commit = "abcdef123"
+    versions_with_tags = {"1.0.1": ["1", "1.0", "1.0.1"]}
+    end_of_life = f"{eol_date.strftime('%Y-%m-%d')}T00:00:00Z"
+    end_of_life_patch_date = datetime.now() - timedelta(days=1)
+    end_of_life_patch = f"{end_of_life_patch_date.strftime('%Y-%m-%d')}T00:00:00Z"
+
+    manifest: Dict = yaml.safe_load(
+        rockcraft.oci_factory_manifest(
+            repository,
+            commit,
+            versions_with_tags,
+            risk_track="stable",
+            support="minor",
+            eol=eol_date,
+        )
+    )
+    release = manifest["upload"][0]["release"]  # pyright: ignore
+
+    # "1" and "1.0" are supported (major/minor), so they get the custom EOL
+    assert release["1"]["end-of-life"] == end_of_life
+    assert release["1.0"]["end-of-life"] == end_of_life
+    # "1.0.1" is a patch tag, unsupported at minor level, so it gets yesterday's date
+    assert release["1.0.1"]["end-of-life"] == end_of_life_patch
